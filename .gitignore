@@ -23,3 +23,5 @@ web/qa/
 *.db
 *.pem
 *.key
+
+web/mofacloak-local-test-*/

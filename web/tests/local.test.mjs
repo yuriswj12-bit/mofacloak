@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,existsSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -10,9 +10,9 @@ import {snapshotDatabase} from '../scripts/local-snapshot.mjs';
 import {openStore} from '../server/store.mjs';
 import {createServer} from 'vite';
 
-function temporary(t){
-  const dir=mkdtempSync(join(tmpdir(),'mofacloak-local-test-'));
-  t.after(()=>{assert.equal(dirname(dir),resolve(tmpdir()));assert.ok(dir.startsWith(join(resolve(tmpdir()),'mofacloak-local-test-')));rmSync(dir,{recursive:true,force:true});});
+function temporary(t,base=tmpdir()){
+  const absoluteBase=resolve(base),dir=mkdtempSync(join(absoluteBase,'mofacloak-local-test-'));
+  t.after(()=>{assert.equal(dirname(dir),absoluteBase);assert.ok(dir.startsWith(join(absoluteBase,'mofacloak-local-test-')));rmSync(dir,{recursive:true,force:true});});
   return dir;
 }
 test('local profile leaves production env untouched and disables payments by default',t=>{
@@ -61,8 +61,9 @@ test('migration snapshot includes committed WAL data, stays consistent and refus
 });
 
 test('real Vite server blocks private data through normal, raw and filesystem URLs',async t=>{
-  // Hosted Windows can expose TEMP through an 8.3 alias; Vite compares canonical paths.
-  const root=realpathSync(temporary(t));mkdirSync(join(root,'data'));
+  // Vite 6.4.5 deliberately rejects paths with '~'. Hosted Windows TEMP uses RUNNER~1.
+  // Keep this HTTP fixture in a checked-out directory with a full path.
+  const root=temporary(t,fileURLToPath(new URL('../',import.meta.url)));mkdirSync(join(root,'data'));
   writeFileSync(join(root,'data/private.json'),'{"private":"isolated-test-only"}');
   writeFileSync(join(root,'visible.txt'),'public development file');
   const server=await createServer({root,configFile:fileURLToPath(new URL('../vite.config.mjs',import.meta.url)),logLevel:'silent',optimizeDeps:{noDiscovery:true,include:[]},server:{fs:{allow:[root]},port:0,strictPort:true,host:'127.0.0.1',warmup:{clientFiles:[]}}});
