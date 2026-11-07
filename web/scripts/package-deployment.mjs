@@ -21,9 +21,10 @@ function add(rel){
 }
 function tar(args){const r=spawnSync('tar',args,{cwd:temp,encoding:'utf8',maxBuffer:8*1024*1024});if(r.error||r.status!==0)throw Error('tar failed: '+(r.error?.message||r.stderr?.slice(0,2000)||'unknown error'));return r.stdout;}
 try{
-  for(const name of ['LOCAL.md','GM-PAY-SETUP.md','PLAN-REVIEW.md','start-local.cmd','start-gmpay.cmd','start-callback.cmd'])add(name);
-  for(const name of ['Dockerfile','.dockerignore','.env.example','package.json','package-lock.json','vite.config.mjs','index.html','server','src','public','scripts','worker','.openai','config/payment-catalog.example.json','config/payment-catalog.confirmed.json','README.md','PAYMENTS.md','TICKETS.md','payments-qa.md','AGENTS.md','tests'])add('web/'+name);
+  for(const name of ['LOCAL.md','GM-PAY-SETUP.md','PLAN-REVIEW.md','SUPABASE.md','start-local.cmd','start-gmpay.cmd','start-callback.cmd'])add(name);
+  for(const name of ['Dockerfile','.dockerignore','.env.example','package.json','package-lock.json','vite.config.mjs','index.html','server','src','public','scripts','worker','.openai','config/supabase-ca.crt','config/payment-catalog.example.json','config/payment-catalog.confirmed.json','README.md','PAYMENTS.md','TICKETS.md','payments-qa.md','AGENTS.md','tests'])add('web/'+name);
   for(const name of ['compose.yaml','deployment.env.example','portal.env.example','Caddyfile.setup','Caddyfile.live','prepare.sh','install-docker.sh','backup.sh','import-portal.sh','setup-gmpay-local.ps1','setup-callback-client.ps1','README.md'])add('deploy/'+name);
+  add('supabase/migrations');add('supabase/config.toml');
   paths.sort();
   for(const path of paths){mkdirSync(dirname(join(temp,path)),{recursive:true});copyFileSync(resolve(root,path),join(temp,path));}
   const files=paths.map(path=>{const bytes=readFileSync(join(temp,path));return {path,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};});

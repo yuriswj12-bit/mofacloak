@@ -77,5 +77,9 @@ export class Store{
     this.db.prepare('INSERT INTO fulfillment_jobs(order_id,account_id,plan_id,months,created_at) VALUES(?,?,?,?,?)').run(g.order_id,id,g.plan_id,g.months,time);
     return {status:'pending_activation'};
   });}
+  disableAccount(id){return this.transaction(()=>{this.db.prepare('UPDATE accounts SET enabled=0 WHERE id=?').run(id);this.db.prepare('DELETE FROM sessions WHERE account_id=?').run(id);});}
+  health(){return this.db.prepare('SELECT id FROM accounts LIMIT 1').get();}
+  expirePending(accountId){return this.db.prepare("UPDATE orders SET status='expired',updated_at=? WHERE account_id=? AND status='pending' AND expires_at IS NOT NULL AND expires_at<=?").run(Date.now(),accountId,Date.now());}
+  touchOrder(id){return this.db.prepare('UPDATE orders SET updated_at=? WHERE id=?').run(Date.now(),id);}
   close(){this.db.close();}
 }

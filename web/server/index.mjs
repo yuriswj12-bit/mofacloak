@@ -3,10 +3,12 @@ import {isIP} from 'node:net';
 import {readFile} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import {loadConfig,root} from './config.mjs';
-import {openStore} from './store.mjs';
+import {openConfiguredStore} from './storage.mjs';
 import {createApp} from './app.mjs';
 
-const config=loadConfig(),store=openStore(config.dbPath),handle=createApp({config,store});
+const config=loadConfig();
+let store;try{store=await openConfiguredStore(config);}catch{console.error('数据库启动失败，请检查私有连接配置及迁移状态。');process.exit(1);}
+const handle=createApp({config,store});
 const staticRoot=resolve(root,'dist/client');
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
 const server=createServer(async(req,res)=>{
@@ -31,4 +33,4 @@ const server=createServer(async(req,res)=>{
 });
 server.requestTimeout=20000;server.headersTimeout=10000;
 server.listen(config.port,config.host,()=>console.log(`Portal API: http://${config.host}:${server.address().port} · payments ${config.enabled?'configured':'not enabled'}`));
-const stop=()=>server.close(()=>{store.close();process.exit(0);});process.on('SIGTERM',stop);process.on('SIGINT',stop);
+const stop=()=>server.close(async()=>{await store.close();process.exit(0);});process.on('SIGTERM',stop);process.on('SIGINT',stop);

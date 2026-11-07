@@ -31,3 +31,5 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - 用户要求真实资金测试使用5美元：仅本机运行catalog给基础版月付增加 `monthlyUsd: "5.00"` 临时覆盖；原人民币月价及年付保留，正式confirmed catalog不改。订单必须持久化实际币种，旧人民币订单不能重标为美元。恢复原价删除本机该覆盖字段后重启网站。
 
 - 客户体验审查要求：访客首页提供登录；跨标签页登出立即清除订单/礼品卡；账户切换关闭旧付款详情；账户刷新失败必须提示。混合美元临时价使用“标价”切换标签，手机周期按钮不得滚动或裁切。审查保留真实未开放状态，不伪造积分、邀请、订阅。
+
+- 用户已授权使用 Supabase 云端存储，并指定暂停原新加坡 yuriswj12-bit's Project，保留数据。当前专用 mofacloak 项目使用 cloak schema、最小权限服务端角色、RLS 和证书验证 TLS；不得向浏览器暴露数据库凭据。原访问码与会话保持兼容。云库故障不得回退 SQLite；云端备份使用 cloud:snapshot，详见根目录 SUPABASE.md。
