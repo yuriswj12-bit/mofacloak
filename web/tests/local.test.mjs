@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,existsSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -61,7 +61,8 @@ test('migration snapshot includes committed WAL data, stays consistent and refus
 });
 
 test('real Vite server blocks private data through normal, raw and filesystem URLs',async t=>{
-  const root=temporary(t);mkdirSync(join(root,'data'));
+  // Hosted Windows can expose TEMP through an 8.3 alias; Vite compares canonical paths.
+  const root=realpathSync(temporary(t));mkdirSync(join(root,'data'));
   writeFileSync(join(root,'data/private.json'),'{"private":"isolated-test-only"}');
   writeFileSync(join(root,'visible.txt'),'public development file');
   const server=await createServer({root,configFile:fileURLToPath(new URL('../vite.config.mjs',import.meta.url)),logLevel:'silent',optimizeDeps:{noDiscovery:true,include:[]},server:{fs:{allow:[root]},port:0,strictPort:true,host:'127.0.0.1',warmup:{clientFiles:[]}}});
@@ -73,6 +74,7 @@ test('real Vite server blocks private data through normal, raw and filesystem UR
       assert.ok([403,404].includes(response.status),`Private path must be inaccessible: ${path} (${response.status})`);
       assert.ok(!(await response.text()).includes('isolated-test-only'));
     }
-    const visible=await fetch(origin+'/visible.txt');assert.equal(visible.status,200);assert.equal(await visible.text(),'public development file');
+    const visible=await fetch(origin+'/visible.txt'),publicText=await visible.text();
+    assert.equal(visible.status,200,`Public fixture must be served; root=${root}; allow=${server.config.server.fs.allow.join(',')}; response=${publicText.slice(0,1500)}`);assert.equal(publicText,'public development file');
   }finally{await server.close();}
 });
