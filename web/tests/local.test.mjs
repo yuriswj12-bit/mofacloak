@@ -68,8 +68,11 @@ test('real Vite server blocks private data through normal, raw and filesystem UR
   try{
     await server.listen();const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
     for(const path of ['/data/private.json','/data/private.json?raw','/@fs/'+join(root,'data/private.json').replaceAll('\\','/')]){
-      const response=await fetch(new URL(path,origin));assert.equal(response.status,403);
+      const response=await fetch(new URL(path,origin));
+      // Patched Vite can hide Windows cross-drive paths with 404 instead of 403.
+      assert.ok([403,404].includes(response.status),`Private path must be inaccessible: ${path} (${response.status})`);
+      assert.ok(!(await response.text()).includes('isolated-test-only'));
     }
-    assert.equal((await fetch(origin+'/visible.txt')).status,200);
+    const visible=await fetch(origin+'/visible.txt');assert.equal(visible.status,200);assert.equal(await visible.text(),'public development file');
   }finally{await server.close();}
 });
