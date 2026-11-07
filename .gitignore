@@ -1,0 +1,25 @@
+web/node_modules/
+web/dist/
+web/.vite/
+*.log
+.backups/
+web/.env
+web/.env.*
+!web/.env.example
+web/.local-runtime.env
+web/data/
+web/config/payment-catalog.json
+deploy/.env
+deploy/config/
+deploy/data/
+deploy/*.tar.gz
+deploy/*.tar.gz.sha256
+
+# Local browser evidence and operator-only acceptance data
+web/qa/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.pem
+*.key

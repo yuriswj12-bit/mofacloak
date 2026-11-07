@@ -1,0 +1,48 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "local": "node scripts/local-dev.mjs",
+    "local:account": "node scripts/local-account.mjs",
+    "local:snapshot": "node scripts/local-snapshot.mjs",
+    "local:gmpay": "node scripts/local-gmpay.mjs",
+    "local:callback": "node scripts/local-callback.mjs",
+    "test:local": "node --test tests/local.test.mjs",
+    "test:tickets": "node --test tests/tickets.test.mjs",
+    "test:quotes": "node --test tests/quotes.test.mjs",
+    "test:notify": "node --test tests/notify-relay.test.mjs",
+    "ticket:list": "node --env-file-if-exists=.env server/manage.mjs ticket:list",
+    "ticket:show": "node --env-file-if-exists=.env server/manage.mjs ticket:show",
+    "ticket:reply": "node --env-file-if-exists=.env server/manage.mjs ticket:reply",
+    "ticket:close": "node --env-file-if-exists=.env server/manage.mjs ticket:close",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "preview": "vite preview",
+    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:pricing": "node --test tests/pricing.test.mjs",
+    "test:deployment": "node --test tests/deployment.test.mjs",
+    "deploy:check": "node scripts/deployment-check.mjs",
+    "deploy:package": "node scripts/package-deployment.mjs",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "dev:api": "node --env-file-if-exists=.env server/index.mjs",
+    "user:create": "node --env-file-if-exists=.env server/manage.mjs user:create",
+    "user:disable": "node --env-file-if-exists=.env server/manage.mjs user:disable",
+    "fulfillment:list": "node --env-file-if-exists=.env server/manage.mjs fulfillment:list",
+    "test:payments": "node --test tests/payments.test.mjs",
+    "payment:check": "node scripts/payment-check.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@vitejs/plugin-react": "5.0.4",
+    "qrcode": "^1.5.4",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "vite": "6.4.5"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

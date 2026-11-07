@@ -1,0 +1,8 @@
+{
+  "note": "用户确认人民币价格、年付=月价×12×80%；用户授权先拟定权益供最终审阅：每月流量已确认300/600/1000GB；设备数暂拟3/5/8台。节点计量尚未接入，正式运营前确认。",
+  "plans": [
+    {"id":"select","name":"基础版","monthlyCny":"79.90","annualCny":"767.04","trafficGB":300,"devices":3},
+    {"id":"premium","name":"标准版","monthlyCny":"169.00","annualCny":"1622.40","trafficGB":600,"devices":5},
+    {"id":"exclusive","name":"尊享版","monthlyCny":"219.00","annualCny":"2102.40","trafficGB":1000,"devices":8}
+  ]
+}

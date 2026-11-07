@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.local-runtime.env
+data
+qa
+config/payment-catalog.json
+*.log

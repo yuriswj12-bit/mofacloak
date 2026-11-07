@@ -1,0 +1,8 @@
+{
+  "note": "配置模板，不是已确认售价。复制为 payment-catalog.json 后自行确认价格与交付权益。",
+  "plans": [
+    {"id":"select","name":"基础版","monthlyCny":"59.00","annualCny":"500.00","trafficGB":200,"devices":5},
+    {"id":"premium","name":"标准版","monthlyCny":"99.00","annualCny":"840.00","trafficGB":500,"devices":8},
+    {"id":"exclusive","name":"尊享版","monthlyCny":"189.00","annualCny":"1600.00","trafficGB":1000,"devices":15}
+  ]
+}

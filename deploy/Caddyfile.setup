@@ -1,0 +1,12 @@
+{
+    email {$ACME_EMAIL}
+}
+{$PORTAL_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8788 {
+        header_up X-Real-IP {remote_host}
+    }
+}
+{$PAY_DOMAIN} {
+    respond "Payment gateway setup in progress" 503
+}
