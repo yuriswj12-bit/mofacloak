@@ -64,7 +64,7 @@ test('real Vite server blocks private data through normal, raw and filesystem UR
   const root=temporary(t);mkdirSync(join(root,'data'));
   writeFileSync(join(root,'data/private.json'),'{"private":"isolated-test-only"}');
   writeFileSync(join(root,'visible.txt'),'public development file');
-  const server=await createServer({root,configFile:fileURLToPath(new URL('../vite.config.mjs',import.meta.url)),logLevel:'silent',optimizeDeps:{noDiscovery:true,include:[]},server:{port:0,strictPort:true,host:'127.0.0.1',warmup:{clientFiles:[]}}});
+  const server=await createServer({root,configFile:fileURLToPath(new URL('../vite.config.mjs',import.meta.url)),logLevel:'silent',optimizeDeps:{noDiscovery:true,include:[]},server:{fs:{allow:[root]},port:0,strictPort:true,host:'127.0.0.1',warmup:{clientFiles:[]}}});
   try{
     await server.listen();const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
     for(const path of ['/data/private.json','/data/private.json?raw','/@fs/'+join(root,'data/private.json').replaceAll('\\','/')]){
