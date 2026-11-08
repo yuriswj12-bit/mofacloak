@@ -2,7 +2,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {readFileSync} from 'node:fs';
 import pg from 'pg';
 
-export const portalTables=['accounts','sessions','orders','payment_events','fulfillment_jobs','gifts','tickets','ticket_messages'];
+export const portalTables=['accounts','sessions','orders','payment_events','fulfillment_jobs','gifts','tickets','ticket_messages','binance_payments'];
 export function postgresStatement(sql){
   // These are application-authored statements; all user values remain parameters.
   let index=0;

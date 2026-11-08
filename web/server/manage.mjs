@@ -10,6 +10,12 @@ try{
     const a=await store.createAccount(name);console.log(JSON.stringify({accountId:a.id,name:a.name,accessCode:a.accessCode,note:'仅在此显示一次。请通过可信渠道私下交给客户，不要提交到 Git。'},null,2));
   }else if(command==='fulfillment:list'){
     console.log(JSON.stringify(await store.db.prepare("SELECT j.order_id,a.name account_name,j.plan_id,j.months,j.status,j.created_at FROM fulfillment_jobs j JOIN accounts a ON a.id=j.account_id WHERE j.status='pending' ORDER BY j.created_at").all(),null,2));
+  }else if(command==='binance:list'){
+    console.log(JSON.stringify(await store.db.prepare('SELECT o.id,o.name,o.status,o.amount_cents,o.currency,b.receiver_uid,b.due_cents,b.claim_transaction_id,b.submitted_at FROM orders o JOIN binance_payments b ON b.order_id=o.id ORDER BY o.created_at DESC LIMIT 100').all(),null,2));
+  }else if(command==='binance:confirm'){
+    if(!args[0]||!args[1])throw Error('Usage: binance:confirm ORDER_ID proof-file.json');
+    const proof=JSON.parse(readFileSync(args[1],'utf8').replace(/^\uFEFF/,''));
+    console.log(JSON.stringify(await store.confirmManualPayment(args[0],proof),null,2));
   }else if(command==='ticket:list'){
     console.log(JSON.stringify(await store.db.prepare('SELECT t.id,t.title,t.category,t.status,t.updated_at,a.name account_name FROM tickets t JOIN accounts a ON a.id=t.account_id ORDER BY t.updated_at DESC LIMIT 100').all(),null,2));
   }else if(command==='ticket:show'){

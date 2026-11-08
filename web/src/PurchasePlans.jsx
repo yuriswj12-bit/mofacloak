@@ -17,15 +17,15 @@ export function PlansPage({cycle,setCycle,currency,setCurrency,onChoose,plans=PL
     <div className="pricing-cards">{plans.map((p,i)=>{
       const baseCurrency=cycle==='year'?(p.annualCurrency||'CNY'):(p.monthlyCurrency||'CNY');
       const price=priceFor(p,cycle,'CNY'),reference=referenceFor(quote,p.id,cycle);
-      const perks=[p.traffic?`${p.traffic} 月流量`:'流量额度待确认',p.devices?`${p.devices} 台设备`:'设备额度待确认','USDT / BSC 收款','付款确认后人工开通','主流客户端订阅导入'];
+      const perks=[p.traffic?`${p.traffic} 月流量`:'流量额度待确认',p.devices?`${p.devices} 台设备`:'设备额度待确认','USDT / 币安 UID 转账','付款确认后人工开通','主流客户端订阅导入'];
       return <section className={'pricing-tier '+(i===1?'popular':'')} key={p.id}>
         {i===1&&<div className="popular-ribbon">推荐套餐 <Star size={15} weight="fill"/></div>}<h3><span>{p.english}</span> {p.name}</h3><div className="tier-rule"/>
         <div className="tier-price">{price!==null&&currency==='CNY'?<><small>{baseCurrency==='USD'?'US$':'¥'}</small><strong>{Number.isInteger(price)?price:price.toFixed(2)}</strong><span>/{cycle==='year'?'年':'月'}</span></>:price!==null&&reference!==null?<><small>约</small><strong>{reference.toFixed(2)}</strong><span>USDT/{cycle==='year'?'年':'月'}</span></>:<strong className="quote-pending">{price===null?'报价待配置':'收银台报价'}</strong>}</div>
-        <span className="annual-pill">{price===null?'套餐报价尚未配置':currency==='USDT'?`订单标价 ${money(price,baseCurrency)}`:cycle==='month'&&baseCurrency==='USD'?'基础版临时测试价 · 5 美元/月':cycle==='month'?`年付 ${money(p.annual)} · 省20%`:p.monthlyCurrency==='USD'?'常规年付价 · 不含月付测试优惠':`折合 ${money(price/12,baseCurrency)} / 月`}</span>
+        <span className="annual-pill">{price===null?'套餐报价尚未配置':currency==='USDT'?`订单标价 ${money(price,baseCurrency)}`:cycle==='month'&&baseCurrency==='USD'?`基础版临时测试价 · ${Number(price).toFixed(2)} 美元/月`:cycle==='month'?`年付 ${money(p.annual)} · 省20%`:p.monthlyCurrency==='USD'?'常规年付价 · 不含月付测试优惠':`折合 ${money(price/12,baseCurrency)} / 月`}</span>
         <ul>{perks.map(t=><li key={t}><Check size={21} weight="bold"/>{t}</li>)}</ul><button className="btn primary full" onClick={()=>onChoose(p)}>{enabled?'选择'+p.name:'查看收款状态'}<ArrowRight size={18}/></button>
       </section>;
     })}</div>
-    <div className="pricing-footnote"><ShieldCheck size={17}/><span>{currency==='USDT'&&quote?.available?`参考汇率日期 ${quote.sourceDate}；`:''}金额由服务端确定，USDT 实付以收银台为准。支付宝、微信支付待开通。</span></div>
+    <div className="pricing-footnote"><ShieldCheck size={17}/><span>{currency==='USDT'&&quote?.available?`参考汇率日期 ${quote.sourceDate}；`:''}金额由服务端确定，USDT 实付以订单付款详情为准。支付宝、微信支付待开通。</span></div>
     <section className="panel faq-panel"><h2>选购前，您可能想了解</h2>{faqs.map(([q,a],i)=><div className="faq-item" key={q}><button onClick={()=>setFaq(faq===i?null:i)} aria-expanded={faq===i}>{q}<Plus size={18} className={faq===i?'rotated':''}/></button>{faq===i&&<p>{a}</p>}</div>)}</section>
   </div>;
 }

@@ -4,14 +4,24 @@ import {hash} from './store.mjs';
 import {Tickets} from './tickets.mjs';
 import {Quotes} from './quotes.mjs';
 import {callbackReady} from './callback-readiness.mjs';
+import {uidQuote} from './binance-uid.mjs';
 
 const headers={'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
 const json=(data,status=200,extra={})=>new Response(JSON.stringify(data),{status,headers:{...headers,'content-type':'application/json; charset=utf-8',...extra}});
 const label={creating:'创建中',review:'待核对',pending:'待支付',paid:'已付款',expired:'已过期',failed:'创建失败'};
 export function publicOrder(o){return {id:o.id,name:o.name,planId:o.plan_id,kind:o.kind,cycle:o.cycle,amount:o.amount_cents/100,currency:o.currency||'CNY',status:label[o.status],paymentStatus:o.status,fulfillmentStatus:o.status==='paid'?(o.kind==='gift'?'gift_issued':'pending_activation'):null,tradeId:o.trade_id,actualAmount:o.actual_amount,token:'USDT',network:'BSC / BEP20',receiveAddress:o.receive_address,paymentUrl:o.payment_url,expiresAt:o.expires_at,txHash:o.tx_hash,createdAt:o.created_at,date:new Date(o.created_at).toLocaleString('sv-SE',{timeZone:'Asia/Shanghai'}).slice(0,16),real:true};}
-export function createApp({config,store,gateway=new GMPay(config)}){
+export function createApp({config,store,gateway=new GMPay(config),quoteService}){
   const tickets=store.tickets||new Tickets(store);
-  const quotes=new Quotes(config);
+  const quotes=quoteService||new Quotes(config);
+  async function present(o){
+    const result=publicOrder(o);
+    if(o.pid==='BINANCE_UID'){
+      const m=await store.manualPayment(o.id);
+      if(!m)throw Error('Missing Binance payment record');
+      return {...result,channel:'binance_uid',network:'币安内部转账',binanceUid:m.receiver_uid,actualAmount:(m.due_cents/100).toFixed(2),claimTransactionId:m.claim_transaction_id,binanceTransactionId:m.confirmed_transaction_id,submittedAt:m.submitted_at,receiveAddress:null,paymentUrl:null};
+    }
+    return {...result,channel:'usdt'};
+  }
   const limits=new Map();
   const cookieName=config.production?'__Host-cloak_session':'cloak_session';
   const cookie=value=>`${cookieName}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${value?604800:0}${config.production?'; Secure':''}`;
@@ -38,7 +48,7 @@ export function createApp({config,store,gateway=new GMPay(config)}){
       if(!['GET','POST'].includes(method))throw new PaymentError('METHOD','不支持此请求。',405);
       if(method==='POST'&&req.headers.get('origin')!==config.origin)throw new PaymentError('ORIGIN_REJECTED','请求来源无效。',403);
       limit('api:'+remoteAddress,240,60000);
-      if(path==='/api/v1/payments/config'&&method==='GET'){const enabled=config.enabled&&callbackReady(config);return json({provider:'GM Pay',protocol:'GMPay v2 / HMAC-SHA256',enabled,token:'USDT',network:'bsc',networkLabel:'BSC / BEP20',pricingCurrency:'CNY',pointsEnabled:false,channels:[{id:'usdt',name:'USDT / BSC',enabled},{id:'alipay',name:'支付宝',enabled:false},{id:'wechat',name:'微信支付',enabled:false}],message:enabled?'USDT / BSC 已配置，主网实付验收尚待完成；支付宝、微信支付未开通。':'USDT 收款尚未开通；支付宝、微信支付尚未接入。',plans:config.plans.map(p=>({id:p.id,name:p.name,price:p.priceCents/100,monthlyCurrency:p.monthlyCurrency,annualCurrency:p.annualCurrency,annual:p.annualCents/100,trafficGB:p.trafficGB??null,traffic:p.trafficGB==null?null:p.trafficGB+' GB',devices:p.devices??null}))});}
+      if(path==='/api/v1/payments/config'&&method==='GET'){const enabled=config.enabled&&callbackReady(config);return json({provider:'GM Pay',protocol:'GMPay v2 / HMAC-SHA256',enabled:enabled||!!config.binanceEnabled,token:'USDT',network:'bsc',networkLabel:'BSC / BEP20',pricingCurrency:'CNY',pointsEnabled:false,binanceUidEnabled:!!config.binanceEnabled,bscEnabled:enabled,channels:[{id:'binance_uid',name:'币安 UID 转账 · 人工核账',enabled:!!config.binanceEnabled},{id:'usdt',name:'USDT / BSC',enabled},{id:'alipay',name:'支付宝',enabled:false},{id:'wechat',name:'微信支付',enabled:false}],message:(config.binanceEnabled?'币安 UID 转账已开通（人工核账）；':'')+(enabled?'USDT / BSC 已配置，主网实付验收尚待完成；支付宝、微信支付未开通。':'USDT 收款尚未开通；支付宝、微信支付尚未接入。'),plans:config.plans.map(p=>({id:p.id,name:p.name,price:p.priceCents/100,monthlyCurrency:p.monthlyCurrency,annualCurrency:p.annualCurrency,annual:p.annualCents/100,trafficGB:p.trafficGB??null,traffic:p.trafficGB==null?null:p.trafficGB+' GB',devices:p.devices??null}))});}
       if(path==='/api/v1/payments/quote'&&method==='GET')return json(await quotes.current());
       if(path==='/api/v1/auth/login'&&method==='POST'){
         limit('login:'+remoteAddress,10,600000);const b=await body(req);
@@ -58,7 +68,25 @@ export function createApp({config,store,gateway=new GMPay(config)}){
         if(method==='POST'&&action==='messages'){limit('ticket-reply:'+user.id,10,60000);return json({ticket:await tickets.userReply(id,user.id,req.headers.get('idempotency-key'),await body(req))});}
         if(method==='POST'&&action==='close'){const b=await body(req);if(Object.keys(b).length)throw new PaymentError('INVALID_TICKET','关闭工单不需要额外参数。');return json({ticket:await tickets.close(id,user.id)});}
       }
-      if(path==='/api/v1/account'&&method==='GET'){await store.expirePending(user.id);return json({account:user,orders:(await store.listOrders(user.id)).map(publicOrder),gifts:(await store.listGifts(user.id)).map(g=>({id:g.id,name:g.name,code:g.code,months:g.months,status:g.redeemed_by?'已兑换':'未兑换',date:new Date(g.created_at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),real:true})),points:{balance:0,history:[]},subscription:null});}
+      if(path==='/api/v1/account'&&method==='GET'){await store.expirePending(user.id);return json({account:user,orders:await Promise.all((await store.listOrders(user.id)).map(present)),gifts:(await store.listGifts(user.id)).map(g=>({id:g.id,name:g.name,code:g.code,months:g.months,status:g.redeemed_by?'已兑换':'未兑换',date:new Date(g.created_at).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),real:true})),points:{balance:0,history:[]},subscription:null});}
+      if(path==='/api/v1/orders/binance'&&method==='POST'){
+        limit('orders:'+user.id,10,60000);const b=await body(req);
+        if(!config.binanceEnabled)throw new PaymentError('BINANCE_DISABLED','币安 UID 转账尚未开通。',503);
+        const product=productFor({...config,enabled:true},b),key=req.headers.get('idempotency-key');
+        if(!key||!/^[A-Za-z0-9_-]{16,100}$/.test(key))throw new PaymentError('IDEMPOTENCY_REQUIRED','缺少有效请求标识。');
+        const fingerprint=hash(JSON.stringify({...b,channel:'binance_uid'}));
+        const existing=await store.db.prepare('SELECT * FROM orders WHERE account_id=? AND idempotency_key=?').get(user.id,key);
+        if(existing){if(existing.request_fingerprint!==fingerprint)throw new PaymentError('IDEMPOTENCY_CONFLICT','该请求标识已用于其他订单。',409);return json({order:await present(existing)});}
+        const quote=await uidQuote(config,quotes,b);
+        const result=await store.createOrder(user.id,key,fingerprint,product,b.cycle,'BINANCE_UID',quote);
+        return json({order:await present(result.order)},result.created?201:200);
+      }
+      const claimMatch=path.match(/^\/api\/v1\/orders\/([A-Za-z0-9]+)\/binance-claim$/);
+      if(claimMatch&&method==='POST'){
+        limit('binance-claim:'+user.id,10,60000);const b=await body(req);
+        if(Object.keys(b).some(k=>k!=='transactionId'))throw new PaymentError('INVALID_CLAIM','仅需提交币安交易号。');
+        return json({order:await present(await store.submitManualPayment(claimMatch[1],user.id,b.transactionId))});
+      }
       if(path==='/api/v1/orders'&&method==='POST'){
         if(config.enabled&&!callbackReady(config))throw new PaymentError('CALLBACK_OFFLINE','到账通知入口未就绪，暂不创建新付款。',503);
         limit('orders:'+user.id,10,60000);const b=await body(req),product=productFor(config,b);
@@ -74,7 +102,7 @@ export function createApp({config,store,gateway=new GMPay(config)}){
           try{const state=await gateway.status(order.trade_id);if(Number(state.status)===3&&String(state.trade_id)===order.trade_id)await store.expire(order.id);else await store.touchOrder(order.id);}catch{/* Only signed callbacks can confirm paid. Preserve local state if gateway unavailable. */}
           order=await store.order(order.id);
         }
-        return json({order:publicOrder(order)});
+        return json({order:await present(order)});
       }
       if(path==='/api/v1/gifts/redeem'&&method==='POST'){limit('redeem:'+user.id,10,60000);const b=await body(req);if(typeof b.code!=='string'||!/^CLOAK-[A-F0-9]{40}$/.test(b.code))throw new PaymentError('INVALID_GIFT','兑换码格式无效。');return json(await store.redeem(user.id,b.code));}
       throw new PaymentError('NOT_FOUND','接口不存在。',404);

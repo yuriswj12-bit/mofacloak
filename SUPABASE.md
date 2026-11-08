@@ -32,3 +32,5 @@ npm run ticket:list
 首次空库迁移使用 `npm run cloud:migrate -- --connection-file <私密连接配置文件>`；SQL 结构位于 `supabase/migrations`。云端产生新写入后，不可直接切回旧 SQLite；必须先停止新订单、导出云端记录并核对迁移后的写入。
 
 本地验证：77 项测试通过、生产构建通过；迁移后的实际云库备份包含 1 个账户、6 个会话、4 个历史订单、1 个工单和 3 条工单消息，到账记录为 0。
+
+2026-11-08：新增第九张表 `cloak.binance_payments`，币安 UID 人工核账说明见 [BINANCE-PAY.md](BINANCE-PAY.md)。原八表、旧订单和原GM Pay账本保留；新的云端快照会包含全部九表。

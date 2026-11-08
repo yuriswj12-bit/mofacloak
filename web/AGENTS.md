@@ -33,3 +33,5 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - 客户体验审查要求：访客首页提供登录；跨标签页登出立即清除订单/礼品卡；账户切换关闭旧付款详情；账户刷新失败必须提示。混合美元临时价使用“标价”切换标签，手机周期按钮不得滚动或裁切。审查保留真实未开放状态，不伪造积分、邀请、订阅。
 
 - 用户已授权使用 Supabase 云端存储，并指定暂停原新加坡 yuriswj12-bit's Project，保留数据。当前专用 mofacloak 项目使用 cloak schema、最小权限服务端角色、RLS 和证书验证 TLS；不得向浏览器暴露数据库凭据。原访问码与会话保持兼容。云库故障不得回退 SQLite；云端备份使用 cloud:snapshot，详见根目录 SUPABASE.md。
+
+- 用户于2026-11-08将基础版本机月付测试价更新为10美元（替代5美元）。用户指定个人币安UID人工核账：新增 binance_payments 表与 /orders/binance、/orders/:id/binance-claim，凭交易号提交仅进入review；真实收款由本机 binance:confirm CLI 核实，记录收款UID、实收、交易号和核账凭证。不得冒充商户自动回调、链上交易或假到账。UID存放在私密配置。报价按有效实时汇率换成USDT并锁定，原BSC订单保持原金额。详见根目录BINANCE-PAY.md。

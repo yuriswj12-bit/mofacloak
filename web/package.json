@@ -34,7 +34,9 @@
     "payment:check": "node scripts/payment-check.mjs",
     "test": "node --test",
     "cloud:migrate": "node scripts/migrate-supabase.mjs",
-    "cloud:snapshot": "node scripts/cloud-snapshot.mjs"
+    "cloud:snapshot": "node scripts/cloud-snapshot.mjs",
+    "binance:list": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs binance:list",
+    "binance:confirm": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs binance:confirm"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

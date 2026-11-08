@@ -43,7 +43,7 @@ export class PostgresStore {
     if (!o) throw new PaymentError('ORDER_NOT_FOUND', '订单不存在。', 404);
     return o;
   }
-  async createOrder(accountId, key, fingerprint, product, cycle, pid) {
+  async createOrder(accountId, key, fingerprint, product, cycle, pid, manual = null) {
     return await this.transaction(async () => {
       const existing = await this.db.prepare('SELECT * FROM orders WHERE account_id=? AND idempotency_key=?').get(accountId, key);
       if (existing) {
@@ -60,11 +60,67 @@ export class PostgresStore {
       const id = 'MF' + randomBytes(14).toString('hex'),
         time = Date.now();
       await this.db.prepare('INSERT INTO orders(id,account_id,idempotency_key,request_fingerprint,name,plan_id,kind,cycle,months,amount_cents,currency,pid,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, accountId, key, fingerprint, product.name, product.plan.id, product.kind, cycle, product.months, product.amount_cents, product.currency || 'CNY', pid, 'creating', time, time);
+      if (manual) {
+        if (pid !== 'BINANCE_UID' || !Number.isSafeInteger(manual.dueCents) || manual.dueCents <= 0 || !/^[1-9][0-9]{4,19}$/.test(manual.uid) || !manual.source) throw new PaymentError('INVALID_MANUAL_PAYMENT', '币安收款配置或报价无效。');
+        await this.db.prepare('INSERT INTO binance_payments(order_id,receiver_uid,due_cents,quote_source,quote_at) VALUES(?,?,?,?,?)').run(id, manual.uid, manual.dueCents, manual.source, time);
+        await this.db.prepare("UPDATE orders SET status='pending',actual_amount=?,expires_at=? WHERE id=?").run((manual.dueCents / 100).toFixed(2), time + 30 * 60000, id);
+      }
       return {
         order: await this.order(id),
         created: true
       };
     });
+  }
+  async manualPayment(id) {
+    return await this.db.prepare('SELECT * FROM binance_payments WHERE order_id=?').get(id);
+  }
+  async submitManualPayment(id, accountId, transactionId) {
+    return await this.transaction(async () => {
+      const o = await this.ownOrder(id, accountId),
+        m = await this.manualPayment(id);
+      if (!m || o.pid !== 'BINANCE_UID') throw new PaymentError('INVALID_CHANNEL', '该订单不是币安 UID 转账订单。');
+      if (typeof transactionId !== 'string' || !/^[-A-Za-z0-9_]{6,100}$/.test(transactionId)) throw new PaymentError('INVALID_TRANSACTION', '请填写币安交易详情中的交易号。');
+      if (o.status === 'paid') {
+        if (m.confirmed_transaction_id !== transactionId) throw new PaymentError('PAYMENT_CONFIRMED', '订单已确认，请勿更换交易号。', 409);
+        return await this.order(id);
+      }
+      if (m.claim_transaction_id && m.claim_transaction_id !== transactionId) throw new PaymentError('CLAIM_CONFLICT', '已提交其他交易号，请通过工单联系管理员。', 409);
+      if (!['pending', 'review', 'expired'].includes(o.status)) throw new PaymentError('INVALID_STATE', '此订单不能提交付款信息。', 409);
+      await this.db.prepare('UPDATE binance_payments SET claim_transaction_id=?,submitted_at=COALESCE(submitted_at,?) WHERE order_id=?').run(transactionId, Date.now(), id);
+      await this.db.prepare("UPDATE orders SET status='review',updated_at=? WHERE id=?").run(Date.now(), id);
+      return await this.order(id);
+    });
+  }
+  async confirmManualPayment(id, proof) {
+    return await this.transaction(async () => {
+      const o = await this.order(id),
+        m = await this.manualPayment(id);
+      if (!o || !m || o.pid !== 'BINANCE_UID') throw new PaymentError('ORDER_NOT_FOUND', '币安订单不存在。', 404);
+      if (!proof || proof.receiverUid !== m.receiver_uid || proof.currency !== 'USDT' || typeof proof.transactionId !== 'string' || !/^[-A-Za-z0-9_]{6,100}$/.test(proof.transactionId) || typeof proof.reviewer !== 'string' || !proof.reviewer.trim() || proof.reviewer.length > 100 || typeof proof.evidenceRef !== 'string' || !proof.evidenceRef.trim() || proof.evidenceRef.length > 500) throw new PaymentError('INVALID_PROOF', '核账必须提供收款 UID、USDT 实收金额、币安交易号、核账人和凭证位置。');
+      const received = cents(proof.receivedAmount);
+      if (received !== m.due_cents) throw new PaymentError('AMOUNT_MISMATCH', '实收金额必须与订单应付 USDT 完全一致；少付请另行人工处理。');
+      if (o.status === 'paid') {
+        if (m.confirmed_transaction_id !== proof.transactionId || m.received_cents !== received) throw new PaymentError('PROOF_CONFLICT', '与已确认记录不一致。', 409);
+        return {
+          duplicate: true,
+          order: o
+        };
+      }
+      if (o.status !== 'review' || m.claim_transaction_id !== proof.transactionId) throw new PaymentError('CLAIM_REQUIRED', '必须先由客户提交相同的币安交易号待核账。', 409);
+      if (await this.db.prepare('SELECT order_id FROM binance_payments WHERE confirmed_transaction_id=? AND order_id<>?').get(proof.transactionId, id)) throw new PaymentError('TRANSACTION_REUSED', '币安交易号已用于其他订单。', 409);
+      const time = Date.now();
+      await this.db.prepare('UPDATE binance_payments SET confirmed_transaction_id=?,received_cents=?,reviewer=?,evidence_ref=?,confirmed_at=? WHERE order_id=?').run(proof.transactionId, received, proof.reviewer.trim(), proof.evidenceRef.trim(), time, id);
+      await this.db.prepare("UPDATE orders SET status='paid',paid_trade_id=?,paid_at=?,updated_at=? WHERE id=?").run('BINANCE_UID:' + proof.transactionId, time, time, id);
+      await this.db.prepare('INSERT INTO payment_events VALUES(?,?,?)').run(id, hash(JSON.stringify(proof)), time);
+      await this.fulfillOrder(o, time);
+      return {
+        duplicate: false,
+        order: await this.order(id)
+      };
+    });
+  }
+  async fulfillOrder(o, time) {
+    if (o.kind === 'gift') await this.db.prepare('INSERT INTO gifts(id,order_id,owner_id,code,plan_id,name,months,created_at) VALUES(?,?,?,?,?,?,?,?)').run('gift_' + randomBytes(12).toString('hex'), o.id, o.account_id, 'CLOAK-' + randomBytes(20).toString('hex').toUpperCase(), o.plan_id, o.name.replace('礼品卡', ''), o.months, time);else await this.db.prepare('INSERT INTO fulfillment_jobs(order_id,account_id,plan_id,months,created_at) VALUES(?,?,?,?,?)').run(o.id, o.account_id, o.plan_id, o.months, time);
   }
   async attachGateway(id, data) {
     return await this.transaction(async () => {
@@ -105,7 +161,7 @@ export class PostgresStore {
       const time = Date.now();
       await this.db.prepare("UPDATE orders SET status='paid',trade_id=COALESCE(trade_id,?),paid_trade_id=?,tx_hash=?,actual_amount=?,receive_address=?,paid_at=?,updated_at=? WHERE id=?").run(params.trade_id, params.trade_id, params.block_transaction_id, String(params.actual_amount), params.receive_address, time, time, o.id);
       await this.db.prepare('INSERT INTO payment_events VALUES(?,?,?)').run(o.id, digest, time);
-      if (o.kind === 'gift') await this.db.prepare('INSERT INTO gifts(id,order_id,owner_id,code,plan_id,name,months,created_at) VALUES(?,?,?,?,?,?,?,?)').run('gift_' + randomBytes(12).toString('hex'), o.id, o.account_id, 'CLOAK-' + randomBytes(20).toString('hex').toUpperCase(), o.plan_id, o.name.replace('礼品卡', ''), o.months, time);else await this.db.prepare('INSERT INTO fulfillment_jobs(order_id,account_id,plan_id,months,created_at) VALUES(?,?,?,?,?)').run(o.id, o.account_id, o.plan_id, o.months, time);
+      await this.fulfillOrder(o, time);
       return {
         duplicate: false,
         order: await this.order(o.id)
@@ -131,10 +187,21 @@ export class PostgresStore {
       };
     });
   }
-  async disableAccount(id){return this.transaction(async()=>{await this.db.prepare('UPDATE accounts SET enabled=0 WHERE id=?').run(id);await this.db.prepare('DELETE FROM sessions WHERE account_id=?').run(id);});}
-  async health(){return this.db.prepare('SELECT id FROM accounts LIMIT 1').get();}
-  async expirePending(accountId){return this.db.prepare("UPDATE orders SET status='expired',updated_at=? WHERE account_id=? AND status='pending' AND expires_at IS NOT NULL AND expires_at<=?").run(Date.now(),accountId,Date.now());}
-  async touchOrder(id){return this.db.prepare('UPDATE orders SET updated_at=? WHERE id=?').run(Date.now(),id);}
+  async disableAccount(id) {
+    return await this.transaction(async () => {
+      await this.db.prepare('UPDATE accounts SET enabled=0 WHERE id=?').run(id);
+      await this.db.prepare('DELETE FROM sessions WHERE account_id=?').run(id);
+    });
+  }
+  async health() {
+    return await this.db.prepare('SELECT id FROM accounts LIMIT 1').get();
+  }
+  async expirePending(accountId) {
+    return await this.db.prepare("UPDATE orders SET status='expired',updated_at=? WHERE account_id=? AND status='pending' AND expires_at IS NOT NULL AND expires_at<=?").run(Date.now(), accountId, Date.now());
+  }
+  async touchOrder(id) {
+    return await this.db.prepare('UPDATE orders SET updated_at=? WHERE id=?').run(Date.now(), id);
+  }
   async close() {
     await this.db.close();
   }

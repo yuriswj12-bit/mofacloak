@@ -17,8 +17,9 @@ test('PostgreSQL schema protects all portal tables from anonymous users',async()
   try{
     await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
     await engine.exec(readFileSync(new URL('../../supabase/migrations/20261107160000_cloak.sql',import.meta.url),'utf8'));
+    await engine.exec(readFileSync(new URL('../../supabase/migrations/20261108040000_binance_uid.sql',import.meta.url),'utf8'));
     const tables=(await engine.query("SELECT tablename,rowsecurity FROM pg_tables WHERE schemaname='cloak'")).rows;
-    assert.equal(tables.length,8);assert.ok(tables.every(t=>t.rowsecurity));
+    assert.equal(tables.length,9);assert.ok(tables.every(t=>t.rowsecurity));
     await engine.exec('SET ROLE anon');
     await assert.rejects(()=>engine.query('SELECT * FROM cloak.accounts'),e=>e.code==='42501');
     await engine.exec('RESET ROLE; SET ROLE authenticated');
@@ -37,6 +38,7 @@ test('PostgreSQL account, order, signed receipt, gift and ticket contracts work 
   const store=new PostgresStore(db);store.tickets=new PostgresTickets(store);
   try{
     await engine.exec(readFileSync(new URL('../../supabase/migrations/20261107160000_cloak.sql',import.meta.url),'utf8'));
+    await engine.exec(readFileSync(new URL('../../supabase/migrations/20261108040000_binance_uid.sql',import.meta.url),'utf8'));
     const config=loadConfig({PAYMENTS_ENABLED:'true',PUBLIC_ORIGIN:'https://merchant.example',GMPAY_BASE_URL:'https://pay.example',GMPAY_PID:'1000',GMPAY_SECRET_KEY:'postgres-test-only-secret',PAYMENT_CATALOG_FILE:'config/payment-catalog.confirmed.json'});
     config.plans[0].monthlyCurrency='USD';config.plans[0].priceCents=500;
     const alice=await store.createAccount('isolated-alice'),bob=await store.createAccount('isolated-bob');
@@ -92,11 +94,12 @@ test('SQLite migration preserves identities, session hashes, orders and ticket m
   db.transaction=fn=>engine.transaction(tx=>db.context.run(tx,fn));
   try{
     await engine.exec(readFileSync(new URL('../../supabase/migrations/20261107160000_cloak.sql',import.meta.url),'utf8'));
+    await engine.exec(readFileSync(new URL('../../supabase/migrations/20261108040000_binance_uid.sql',import.meta.url),'utf8'));
     const account=source.createAccount('migration-fixture'),session=source.login(account.accessCode);
     const ticket=new Tickets(source).create(account.id,'migration-ticket-key-001',{title:'Migration check',category:'other',message:'Preserve this isolated message'}).ticket;
     const config=loadConfig({PAYMENT_CATALOG_FILE:'config/payment-catalog.confirmed.json'}),plan=config.plans[0];
     source.createOrder(account.id,'migration-order-key-001','migration-fingerprint',{plan,name:'Migration order',amount_cents:7990,months:1,kind:'plan'},'month','1000');
-    const report=await copyPortal(source.db,db);assert.equal(report.length,8);
+    const report=await copyPortal(source.db,db);assert.equal(report.length,9);
     const target=new PostgresStore(db),tickets=new PostgresTickets(target);
     assert.equal((await target.account(session.session)).id,account.id);
     assert.equal((await target.login(account.accessCode)).account.id,account.id);
@@ -116,6 +119,7 @@ test('failed import rolls all destination tables back and leaves source records 
   db.transaction=fn=>engine.transaction(tx=>db.context.run(tx,fn));
   try{
     await engine.exec(readFileSync(new URL('../../supabase/migrations/20261107160000_cloak.sql',import.meta.url),'utf8'));
+    await engine.exec(readFileSync(new URL('../../supabase/migrations/20261108040000_binance_uid.sql',import.meta.url),'utf8'));
     const account=source.createAccount('rollback-fixture');
     const o=source.createOrder(account.id,'migration-invalid-key-01','fp',{plan:{id:'select'},name:'Isolated invalid import',amount_cents:0,months:1,kind:'plan'},'month','1000').order;
     await assert.rejects(()=>copyPortal(source.db,db));
