@@ -54,3 +54,6 @@ GitHub Actions在Windows与Linux分别执行构建、隔离测试及依赖审计
 | 支付宝、微信支付、自动退款 | 未接入 |
 
 详细客户视角检查见 [客户流程审查](CUSTOMER-AUDIT.md)。目前是可运行的真实收款开发项目，尚不是能自动交付节点的完整运营系统。
+
+
+云端存储现已接入 Supabase，配置、权限、备份及回滚说明见 [SUPABASE.md](SUPABASE.md)。

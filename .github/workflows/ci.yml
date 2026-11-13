@@ -28,3 +28,21 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: docker build -t mofacloak-smoke web
+      - run: |
+          docker run --name cloak-smoke -d -e PAYMENTS_ENABLED=false mofacloak-smoke node server/index.mjs
+          for attempt in $(seq 1 15); do
+            if docker exec cloak-smoke node server/healthcheck.mjs; then exit 0; fi
+            sleep 1
+          done
+          docker logs cloak-smoke
+          exit 1
+      - if: always()
+        run: docker rm -f cloak-smoke || true

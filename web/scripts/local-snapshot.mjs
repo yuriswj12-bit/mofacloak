@@ -31,7 +31,7 @@ export async function snapshotDatabase(source,destination){
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   try{
-    const {dbPath}=localProfile();
+    const profile=localProfile();if(profile.env.DATABASE_PROVIDER==='supabase')throw Error('当前数据在云端，请运行 npm run cloud:snapshot；本地SQLite只保留迁移前记录。');const {dbPath}=profile;
     const stamp=new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomBytes(3).toString('hex');
     const result=await snapshotDatabase(dbPath,resolve(dirname(dbPath),'migrations',stamp));
     console.log(`已生成一致性迁移快照：${result.directory}\n未停止服务、未移动源数据、未包含明文访问码。`);

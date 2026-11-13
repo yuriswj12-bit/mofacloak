@@ -11,6 +11,17 @@ export function loadConfig(env=process.env){
   if(production&&origin.protocol!=='https:')throw new Error('Production PUBLIC_ORIGIN requires HTTPS');
   const enabled=env.PAYMENTS_ENABLED==='true';
   const config={enabled,origin:origin.origin,notifyOrigin:env.GMPAY_NOTIFY_ORIGIN||origin.origin,localGateway:false,callbackStatePath:resolve(root,'data/callback-client/current.json'),production,trustProxy:env.TRUST_PROXY==='true',host:env.HOST||'127.0.0.1',port:Number(env.PORT||8788),dbPath:resolve(root,env.DATABASE_PATH||'data/portal.sqlite'),gateway:env.GMPAY_BASE_URL||'',pid:env.GMPAY_PID||'',secret:env.GMPAY_SECRET_KEY||'',rateURL:env.QUOTE_RATE_URL||'',network:'binance',receiveAddress:env.GMPAY_RECEIVE_ADDRESS||'',plans:[]};
+  config.databaseProvider=env.DATABASE_PROVIDER||'sqlite';
+  config.binanceUid=env.BINANCE_RECEIVE_UID||'';
+  config.binanceEnabled=env.BINANCE_UID_ENABLED==='true';
+  if(config.binanceUid&&!/^[1-9][0-9]{4,19}$/.test(config.binanceUid))throw Error('Invalid Binance receiving UID');
+  if(config.binanceEnabled&&!config.binanceUid)throw Error('Binance UID receiving requires a real UID');
+  config.databaseURL=env.SUPABASE_DATABASE_URL||'';
+  config.databaseCAFile=env.DATABASE_CA_FILE?resolve(root,env.DATABASE_CA_FILE):'';
+  if(!['sqlite','supabase'].includes(config.databaseProvider))throw Error('Unsupported DATABASE_PROVIDER');
+  if(config.databaseProvider==='supabase'){
+    try{const db=new URL(config.databaseURL);if(!['postgres:','postgresql:'].includes(db.protocol)||!db.username||!db.password||!db.hostname)throw Error();}catch{throw Error('Supabase storage requires a valid private database URL');}
+  }
   if(enabled){
     if(!config.gateway||!config.pid||!config.secret||!env.PAYMENT_CATALOG_FILE)throw new Error('Enabled payments require GMPAY_BASE_URL, GMPAY_PID, GMPAY_SECRET_KEY and PAYMENT_CATALOG_FILE');
     const gateway=new URL(config.gateway);

@@ -14,10 +14,10 @@
     "test:tickets": "node --test tests/tickets.test.mjs",
     "test:quotes": "node --test tests/quotes.test.mjs",
     "test:notify": "node --test tests/notify-relay.test.mjs",
-    "ticket:list": "node --env-file-if-exists=.env server/manage.mjs ticket:list",
-    "ticket:show": "node --env-file-if-exists=.env server/manage.mjs ticket:show",
-    "ticket:reply": "node --env-file-if-exists=.env server/manage.mjs ticket:reply",
-    "ticket:close": "node --env-file-if-exists=.env server/manage.mjs ticket:close",
+    "ticket:list": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs ticket:list",
+    "ticket:show": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs ticket:show",
+    "ticket:reply": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs ticket:reply",
+    "ticket:close": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs ticket:close",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
@@ -27,16 +27,21 @@
     "deploy:package": "node scripts/package-deployment.mjs",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "dev:api": "node --env-file-if-exists=.env server/index.mjs",
-    "user:create": "node --env-file-if-exists=.env server/manage.mjs user:create",
-    "user:disable": "node --env-file-if-exists=.env server/manage.mjs user:disable",
-    "fulfillment:list": "node --env-file-if-exists=.env server/manage.mjs fulfillment:list",
+    "user:create": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs user:create",
+    "user:disable": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs user:disable",
+    "fulfillment:list": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs fulfillment:list",
     "test:payments": "node --test tests/payments.test.mjs",
     "payment:check": "node scripts/payment-check.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "cloud:migrate": "node scripts/migrate-supabase.mjs",
+    "cloud:snapshot": "node scripts/cloud-snapshot.mjs",
+    "binance:list": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs binance:list",
+    "binance:confirm": "node --env-file-if-exists=.local-runtime.env --env-file-if-exists=.env server/manage.mjs binance:confirm"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "@vitejs/plugin-react": "5.0.4",
+    "pg": "8.23.1",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -44,5 +49,8 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
   }
 }

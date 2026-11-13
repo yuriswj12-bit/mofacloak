@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {localProfile,webRoot} from './local-profile.mjs';
 import {loadConfig} from '../server/config.mjs';
+import {openConfiguredStore} from '../server/storage.mjs';
 import {callbackReady} from '../server/callback-readiness.mjs';
 
 const checks=[];
@@ -28,7 +29,7 @@ try{
   requireThat(config.localGateway);
   const input=JSON.parse(readFileSync(resolve(webRoot,'data/payment-setup/input.json'),'utf8'));
   await check('website-and-api',async()=>requireThat((await json(config.origin+'/api/v1/health')).status==='ok'));
-  await check('live-channel-enabled',async()=>{const c=await json(config.origin+'/api/v1/payments/config');requireThat(c.enabled&&c.channels.filter(x=>x.enabled).map(x=>x.id).join()==='usdt');return {plans:c.plans.map(p=>({name:p.name,monthly:p.price,monthlyCurrency:p.monthlyCurrency,annual:p.annual,trafficGB:p.trafficGB}))};});
+  await check('live-channel-enabled',async()=>{const c=await json(config.origin+'/api/v1/payments/config');requireThat(c.enabled&&c.channels.some(x=>x.id==='usdt'&&x.enabled)&&c.channels.filter(x=>x.enabled).every(x=>['usdt','binance_uid'].includes(x.id)));return {plans:c.plans.map(p=>({name:p.name,monthly:p.price,monthlyCurrency:p.monthlyCurrency,annual:p.annual,trafficGB:p.trafficGB}))};});
   await check('gateway-only-bsc-usdt',async()=>{const c=await json(config.gateway+'/payments/gmpay/v1/config');requireThat(c.status_code===200&&c.data.supported_assets.length===1&&['binance','bsc'].includes(c.data.supported_assets[0].network)&&c.data.supported_assets[0].tokens.map(x=>x.toLowerCase()).join()==='usdt');});
   await check('callback-heartbeat',async()=>requireThat(callbackReady(config)));
   await check('public-callback-signature-rejected',async()=>requireThat((await request(config.notifyOrigin+'/api/v1/payments/gmpay/notify',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})).status===401));
@@ -46,18 +47,24 @@ try{
   });
   await check('bsc-wss-mainnet-live-head',()=>rpcProbe(input.rpc));
   await check('payment-ledger-consistent',async()=>{
-    const portal=new DatabaseSync(profile.dbPath,{readOnly:true}),native=new DatabaseSync(resolve(webRoot,'data/gmpay-local/epusdt.db'),{readOnly:true});
+    const cloud=config.databaseProvider==='supabase'?await openConfiguredStore(config):null;
+    const portal=cloud?.db||new DatabaseSync(profile.dbPath,{readOnly:true}),native=new DatabaseSync(resolve(webRoot,'data/gmpay-local/epusdt.db'),{readOnly:true});
     try{
-      requireThat(Object.values(portal.prepare('PRAGMA integrity_check').get())[0]==='ok');
-      const orders=portal.prepare('SELECT id,status,amount_cents,currency,trade_id,paid_trade_id,tx_hash FROM orders').all();
+      if(cloud)await cloud.health();else requireThat(Object.values(portal.prepare('PRAGMA integrity_check').get())[0]==='ok');
+      const orders=await portal.prepare('SELECT id,pid,status,amount_cents,currency,trade_id,paid_trade_id,tx_hash FROM orders').all();
       for(const o of orders){
+        if(o.pid==='BINANCE_UID'){
+          const m=await portal.prepare('SELECT * FROM binance_payments WHERE order_id=?').get(o.id);requireThat(m&&m.receiver_uid&&m.due_cents>0);
+          if(o.status==='paid')requireThat(m.confirmed_transaction_id&&m.received_cents===m.due_cents&&m.reviewer&&m.evidence_ref&&m.confirmed_at&&o.paid_trade_id==='BINANCE_UID:'+m.confirmed_transaction_id&&await portal.prepare('SELECT order_id FROM payment_events WHERE order_id=?').get(o.id));
+          continue;
+        }
         const upstream=native.prepare('SELECT trade_id,status,amount,currency,block_transaction_id FROM orders WHERE order_id=?').get(o.id);
-        if(o.status==='paid'){requireThat(upstream?.status===2&&upstream.trade_id===o.paid_trade_id&&upstream.block_transaction_id?.toLowerCase()===o.tx_hash?.toLowerCase()&&Math.round(upstream.amount*100)===o.amount_cents&&upstream.currency.toUpperCase()===o.currency);requireThat(portal.prepare('SELECT order_id FROM payment_events WHERE order_id=?').get(o.id));}
+        if(o.status==='paid'){requireThat(upstream?.status===2&&upstream.trade_id===o.paid_trade_id&&upstream.block_transaction_id?.toLowerCase()===o.tx_hash?.toLowerCase()&&Math.round(upstream.amount*100)===o.amount_cents&&upstream.currency.toUpperCase()===o.currency);requireThat(await portal.prepare('SELECT order_id FROM payment_events WHERE order_id=?').get(o.id));}
         if(upstream?.status===2)requireThat(o.status==='paid');
         if(['creating','review'].includes(o.status))throw Error('Manual reconciliation required');
       }
-      return {orders:orders.length,paid:orders.filter(o=>o.status==='paid').length,pending:orders.filter(o=>o.status==='pending').length,receiptEvents:portal.prepare('SELECT count(*) n FROM payment_events').get().n};
-    }finally{portal.close();native.close();}
+      return {orders:orders.length,paid:orders.filter(o=>o.status==='paid').length,pending:orders.filter(o=>o.status==='pending').length,receiptEvents:(await portal.prepare('SELECT count(*) n FROM payment_events').get()).n};
+    }finally{if(cloud)await cloud.close();else portal.close();native.close();}
   });
   const report={checkedAt:new Date().toISOString(),ready:checks.every(x=>x.ok),checks,mainnetAcceptance:'Requires a real wallet transfer and matching signed receipt; no transfer was performed by this check.'};
   const dir=resolve(webRoot,'data/payment-setup');mkdirSync(dir,{recursive:true});writeFileSync(resolve(dir,'readiness-latest.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});
